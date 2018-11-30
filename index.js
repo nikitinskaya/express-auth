@@ -8,6 +8,12 @@ const PORT = 4321;
 const URL = 'https://kodaktor.ru/j/users';
 const app = express();
 
+const CORS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE',
+    'Access-Control-Allow-Headers': 'Content-Type, Access-Control-Allow-Headers',
+};
+
 const checkAuth = (r, res, next) => {
     if (r.session.auth === 'ok') {
         next();
@@ -20,6 +26,8 @@ app
     .use(bodyParser.json())
     .use(bodyParser.urlencoded({ extended: true }))
     .use(session({ secret: 'mysecret', resave: true, saveUninitialized: true}))
+    .get('/', r => r.res.render('author'))
+    .get(/author/, r => r.res.set(CORS).end('Вера Никитинская'))
     .get(/hello/, r => r.res.end('Hello World'))
     .get(/login/, r => r.res.render('login'))
     .post('/login/check/', r => {
