@@ -2,6 +2,8 @@ const express = require('express');
 const { get } = require ('axios');
 const bodyParser = require('body-parser');
 const session = require('express-session');
+const passport = require('passport');
+const Strategy = require('passport-facebook').Strategy;
 
 let items;
 const PORT = 4321;
@@ -14,45 +16,49 @@ const CORS = {
     'Access-Control-Allow-Headers': 'Content-Type, Access-Control-Allow-Headers',
 };
 
-const checkAuth = (r, res, next) => {
-    if (r.session.auth === 'ok') {
-        next();
-    } else {
-        res.redirect('/login');
-    }
-};
+passport.use(new Strategy({
+        clientID: process.env.CLIENT_ID,
+        clientSecret: process.env.CLIENT_SECRET,
+        callbackURL: `http://localhost:${process.env.PORT || PORT}/login/facebook/return`
+    },function(accessToken, refreshToken, profile, done) {
+    return done(null, profile);
+}));
+
+passport.serializeUser(function(user, done) {
+    done(null, user);
+});
+
+passport.deserializeUser(function(obj, done) {
+    done(null, obj);
+});
 
 app
     .use(bodyParser.json())
     .use(bodyParser.urlencoded({ extended: true }))
     .use(session({ secret: 'mysecret', resave: true, saveUninitialized: true}))
+    .use(passport.initialize())
+    .use(passport.session())
     .get('/', r => r.res.render('author'))
-    .get(/author/, r => r.res.set(CORS).end('Вера Никитинская'))
+    .get(/author/, r => r.res.set(CORS).send('Вера Никитинская'))
     .get(/hello/, r => r.res.end('Hello World'))
-    .get(/login/, r => r.res.render('login'))
-    .post('/login/check/', r => {
-        const { body: { login: l }} = r;
-        const user = items.find(({ login }) => login === l);
-        if (user) {
-            if (user.password === r.body.pass) {
-                r.session.auth = 'ok';
-                r.res.redirect('/users');
-            } else {
-                r.res.send('Wrong pass');
-            }
+    .get('/login', r => r.res.render('login'))
+    .get('/login/facebook', passport.authenticate('facebook'))
+    .get('/login/facebook/return',
+        passport.authenticate('facebook', { failureRedirect: '/login' }),
+        function(req, res) {
+            res.redirect('/users');
+        })
+    .get(/logout/, (req, res) => {
+        req.logout();
+        res.redirect('/');
+    })
+    .get(/users/, async (req, res) => {
+        if (req.isAuthenticated()) {
+            res.render('list', { title: 'Login list', items });
         } else {
-            r.res.send('No such user');
+            res.redirect('/login');
         }
     })
-    .get(/logout/, r => {
-        if (r.session.auth === 'ok') {
-            r.session.auth = '';
-            r.res.redirect('/login');
-        } else {
-            r.res.redirect('/login');
-        }
-    })
-    .get(/users/, checkAuth, async r => r.res.render('list', { title: 'Login list', items }))
     .use(r => r.res.status(404).end('Not here, sorry'))
     .use((e, r, res, n) => res.status(500).end(`Error: ${e}`))
     .set('view engine', 'pug')
